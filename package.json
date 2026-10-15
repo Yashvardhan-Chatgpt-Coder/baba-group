@@ -1,22 +1,20 @@
 {
-  "name": "baba-group-discord-bot",
+  "name": "baba-group-dashboard",
   "version": "1.0.0",
-  "description": "Discord bot for Grand RP Baba Group",
-  "main": "dist/index.js",
+  "description": "Baba Group Web Dashboard (Root Frontend) & Discord Bot (./backend)",
+  "type": "module",
   "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsx watch src/index.ts"
+    "dev": "npm --prefix backend run dev",
+    "start": "npm --prefix backend run start",
+    "backend:install": "npm --prefix backend install",
+    "backend:build": "npm --prefix backend run build"
   },
-  "dependencies": {
-    "discord.js": "^14.18.0",
-    "dotenv": "^16.4.7",
-    "express": "^4.21.2"
-  },
-  "devDependencies": {
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.13.9",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
-  }
+  "keywords": [
+    "discord",
+    "baba-group",
+    "dashboard",
+    "embed-builder"
+  ],
+  "author": "Baba Group",
+  "license": "ISC"
 }

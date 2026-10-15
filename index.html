@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Baba Group — Embed Builder & Message Sender</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Password Authentication Modal Overlay -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-card">
+      <img id="authBotAvatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot Avatar" class="auth-logo" />
+      <h2>Protected Control Panel</h2>
+      <p>Enter the secret password to unlock the Embed Builder. Your session stays active for <strong>72 hours</strong>.</p>
+      <form id="authForm">
+        <input type="password" id="authPassword" placeholder="Enter Secret Password..." required autocomplete="current-password" />
+        <button type="submit" id="authSubmitBtn" class="btn-primary">Unlock Control Panel</button>
+      </form>
+      <div id="authError" class="auth-error hidden"></div>
+    </div>
+  </div>
+
+  <!-- Main Dashboard Application -->
+  <div class="app-container hidden" id="appContent">
+    <!-- Top Header -->
+    <header class="top-bar">
+      <div class="brand">
+        <img id="headerBotAvatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot Avatar" class="brand-avatar" />
+        <div>
+          <h1 id="headerBotName">Baba Group Bot</h1>
+          <span class="subtitle">Discord Announcement &amp; Embed Control Panel</span>
+        </div>
+      </div>
+      <div class="header-right">
+        <div class="status-badge">
+          <span class="dot"></span> Unlocked (72h Session)
+        </div>
+        <button type="button" id="logoutBtn" class="btn-secondary btn-sm" title="Lock Panel">🔒 Lock</button>
+      </div>
+    </header>
+
+    <!-- Main Content Split View -->
+    <main class="workspace">
+      <!-- Left Column: Editor Form -->
+      <section class="editor-panel">
+        <div class="panel-header">
+          <h2>Compose Message</h2>
+          <button type="button" id="clearBtn" class="btn-secondary">Clear All</button>
+        </div>
+
+        <form id="embedForm">
+          <!-- Channel Selector -->
+          <div class="form-group">
+            <div class="label-row">
+              <label for="channelSelect">Target Discord Channel <span class="req">*</span></label>
+              <button type="button" id="refreshChannelsBtn" class="btn-tag" title="Reload all server channels">↻ Refresh Channels</button>
+            </div>
+            <select id="channelSelect" required>
+              <option value="">Loading server channels...</option>
+            </select>
+          </div>
+
+          <!-- Role Tag Helper Bar -->
+          <div class="form-group role-helper-box">
+            <label>Tag / Mention a Role or Everyone</label>
+            <div class="role-inserter-row">
+              <select id="roleSelect">
+                <option value="">Select a Role to tag...</option>
+              </select>
+              <button type="button" id="insertRoleBtn" class="btn-secondary">Insert Role Tag</button>
+              <button type="button" id="insertEveryoneBtn" class="btn-tag">@everyone</button>
+              <button type="button" id="insertHereBtn" class="btn-tag">@here</button>
+            </div>
+            <small class="hint"> Note: To actually ping/notify users with a role, the tag is inserted into <strong>Message Content (Outside Embed)</strong>.</small>
+          </div>
+
+          <!-- Plain Text Message (Outside Embed) -->
+          <div class="form-group">
+            <label for="msgContent">Message Content (Outside Embed — Role Pings Go Here)</label>
+            <input type="text" id="msgContent" placeholder="e.g. @everyone or <@&Role_ID> Important family announcement below!" />
+          </div>
+
+          <hr class="divider" />
+
+          <!-- Embed Author & Color Row -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="embedAuthor">Header / Author Text</label>
+              <input type="text" id="embedAuthor" placeholder="e.g. BABA GROUP MANAGEMENT" />
+            </div>
+            <div class="form-group color-group">
+              <label for="embedColor">Sidebar Accent Color</label>
+              <div class="color-picker-wrap">
+                <input type="color" id="embedColor" value="#2b2d31" />
+                <div class="preset-colors">
+                  <button type="button" class="color-preset" data-color="#2b2d31" style="background:#2b2d31" title="Stealth Dark"></button>
+                  <button type="button" class="color-preset" data-color="#1e1f22" style="background:#1e1f22" title="Obsidian"></button>
+                  <button type="button" class="color-preset" data-color="#ffffff" style="background:#ffffff" title="Pure White"></button>
+                  <button type="button" class="color-preset" data-color="#5865f2" style="background:#5865f2" title="Discord Blurple"></button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Embed Title -->
+          <div class="form-group">
+            <label for="embedTitle">Embed Title</label>
+            <input type="text" id="embedTitle" placeholder="e.g. Official Server Update" />
+          </div>
+
+          <!-- Embed Description -->
+          <div class="form-group">
+            <label for="embedDesc">Embed Description (Supports Discord Markdown &amp; Role Mentions)</label>
+            <textarea id="embedDesc" rows="6" placeholder="Write your announcement here... Use **bold**, *italics*, `code`, or > quotes."></textarea>
+          </div>
+
+          <!-- Image & Thumbnail URLs -->
+          <div class="form-row">
+            <div class="form-group">
+              <label for="embedThumb">Thumbnail Image URL (Top Right)</label>
+              <input type="url" id="embedThumb" placeholder="https://example.com/logo.png" />
+            </div>
+            <div class="form-group">
+              <label for="embedImage">Banner Image URL (Bottom Large)</label>
+              <input type="url" id="embedImage" placeholder="https://example.com/banner.png" />
+            </div>
+          </div>
+
+          <!-- Embed Footer -->
+          <div class="form-group">
+            <label for="embedFooter">Footer Text</label>
+            <input type="text" id="embedFooter" placeholder="e.g. Baba Group • Official Communication" />
+          </div>
+
+          <!-- Submit Button & Notification -->
+          <div class="form-actions">
+            <button type="submit" id="sendBtn" class="btn-primary">
+              Send Message to Discord
+            </button>
+          </div>
+
+          <div id="statusToast" class="toast hidden"></div>
+        </form>
+      </section>
+
+      <!-- Right Column: Live Discord Preview -->
+      <section class="preview-panel">
+        <div class="panel-header">
+          <h2>Live Discord Preview</h2>
+          <span class="preview-tag">Real-Time</span>
+        </div>
+
+        <div class="discord-chat-window">
+          <div class="discord-message">
+            <img id="previewBotAvatar" src="https://cdn.discordapp.com/embed/avatars/0.png" alt="Bot" class="discord-avatar" />
+            <div class="discord-message-body">
+              <div class="discord-header">
+                <span id="previewBotName" class="discord-username">Baba Group Bot</span>
+                <span class="discord-bot-tag">APP</span>
+                <span class="discord-timestamp">Today at 12:00 PM</span>
+              </div>
+
+              <!-- Content outside embed -->
+              <div id="previewContent" class="discord-text-content hidden"></div>
+
+              <!-- The Embed Box -->
+              <div id="previewEmbed" class="discord-embed">
+                <div class="discord-embed-grid">
+                  <div class="discord-embed-main">
+                    <div id="previewAuthor" class="discord-embed-author hidden"></div>
+                    <div id="previewTitle" class="discord-embed-title">Embed Preview</div>
+                    <div id="previewDesc" class="discord-embed-description">Start typing in the form on the left to see how your message will look inside Discord.</div>
+                  </div>
+                  <img id="previewThumb" class="discord-embed-thumb hidden" src="" alt="Thumbnail" />
+                </div>
+
+                <img id="previewImage" class="discord-embed-image hidden" src="" alt="Banner" />
+
+                <div id="previewFooterWrap" class="discord-embed-footer">
+                  <span id="previewFooterText">Baba Group</span>
+                  <span class="footer-dot">•</span>
+                  <span>Today at 12:00 PM</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -1,11 +1,28 @@
 import { Client, GatewayIntentBits, Events, REST, Routes, Collection } from 'discord.js';
 import dotenv from 'dotenv';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { Command } from './types/Command.js';
 import { pingCommand } from './commands/ping.js';
 import { moveallCommand } from './commands/moveall.js';
 import { startDashboard } from './dashboard/server.js';
 
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load .env from backend/ or project root
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(__dirname, '../../.env'),
+  path.resolve(__dirname, '../../../.env'),
+];
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
@@ -44,8 +61,9 @@ for (const cmd of commandList) {
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
 
-  // Start the Embed Builder Web Dashboard
-  startDashboard(client, 3000);
+  // Start the Embed Builder Web Dashboard Backend
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  startDashboard(client, port);
 
   if (clientId) {
     const rest = new REST({ version: '10' }).setToken(token);
