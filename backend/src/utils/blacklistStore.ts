@@ -161,7 +161,6 @@ export function buildBlacklistPayload(guildIconUrl?: string | null) {
     embeds: [embed],
     allowedMentions: {
       parse: ['roles', 'users', 'everyone'] as any,
-      roles: ['1557805108509806673'],
     },
   };
 }
