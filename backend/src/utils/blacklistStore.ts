@@ -153,10 +153,15 @@ export function buildBlacklistPayload(guildIconUrl?: string | null) {
 
   const plainMessageText =
     `🚫 **Official Blacklist Notice**\n` +
-    `The following individuals are blacklisted from receiving assistance from Baba Group. All employees must review and comply with this notice.`;
+    `The following individuals are blacklisted from receiving assistance from Baba Group. All employees must review and comply with this notice.\n` +
+    `<@&1557805108509806673>`;
 
   return {
     content: plainMessageText,
     embeds: [embed],
+    allowedMentions: {
+      parse: ['roles', 'users', 'everyone'] as any,
+      roles: ['1557805108509806673'],
+    },
   };
 }
