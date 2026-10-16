@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, Events, REST, Routes, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Events, REST, Routes, Collection, ActivityType } from 'discord.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
@@ -60,6 +60,17 @@ for (const cmd of commandList) {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
+
+  // Set explicit online status and activity
+  c.user.setPresence({
+    status: 'online',
+    activities: [
+      {
+        name: 'Baba Group | /moveall',
+        type: ActivityType.Watching,
+      },
+    ],
+  });
 
   // Start the Embed Builder Web Dashboard Backend
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
