@@ -6,6 +6,7 @@ import { fileURLToPath } from 'url';
 import { Command } from './types/Command.js';
 import { pingCommand } from './commands/ping.js';
 import { moveallCommand } from './commands/moveall.js';
+import { blacklistCommand } from './commands/blacklist.js';
 import { startDashboard } from './dashboard/server.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,7 +53,7 @@ const client = new Client({
 // Command registry
 const commands = new Collection<string, Command>();
 
-const commandList: Command[] = [pingCommand, moveallCommand];
+const commandList: Command[] = [pingCommand, moveallCommand, blacklistCommand];
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd);
