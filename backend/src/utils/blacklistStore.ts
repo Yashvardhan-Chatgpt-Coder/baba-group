@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, Client } from 'discord.js';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -49,77 +49,105 @@ const INITIAL_NAMES: string[] = [
   'Demon King',
 ];
 
+export interface BlacklistData {
+  names: string[];
+  postedMessage?: {
+    channelId: string;
+    messageId: string;
+  };
+}
+
 export const BLACKLIST_BANNER_URL = 'https://i.imgur.com/8NiI50L.png';
 export const BLACKLIST_EMBED_COLOR = 0xc9a66b; // Premium Gold #C9A66B
 
-export function getBlacklist(): string[] {
+export function getBlacklistData(): BlacklistData {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     if (!fs.existsSync(DATA_FILE)) {
-      saveBlacklist(INITIAL_NAMES);
-      return [...INITIAL_NAMES];
+      const initialData: BlacklistData = { names: [...INITIAL_NAMES] };
+      saveBlacklistData(initialData);
+      return initialData;
     }
     const raw = fs.readFileSync(DATA_FILE, 'utf-8');
     const parsed = JSON.parse(raw);
+
+    // Backward compatibility: if file is an array
     if (Array.isArray(parsed)) {
+      const migrated: BlacklistData = { names: parsed };
+      saveBlacklistData(migrated);
+      return migrated;
+    }
+
+    if (parsed && Array.isArray(parsed.names)) {
       return parsed;
     }
-    return [...INITIAL_NAMES];
+
+    return { names: [...INITIAL_NAMES] };
   } catch (err) {
     console.error('Error reading blacklist file:', err);
-    return [...INITIAL_NAMES];
+    return { names: [...INITIAL_NAMES] };
   }
 }
 
-export function saveBlacklist(list: string[]): void {
+export function saveBlacklistData(data: BlacklistData): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
-    fs.writeFileSync(DATA_FILE, JSON.stringify(list, null, 2), 'utf-8');
+    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error saving blacklist file:', err);
   }
 }
 
+export function getBlacklist(): string[] {
+  return getBlacklistData().names;
+}
+
+export function setPostedMessageInfo(channelId: string, messageId: string): void {
+  const data = getBlacklistData();
+  data.postedMessage = { channelId, messageId };
+  saveBlacklistData(data);
+}
+
 export function addBlacklistName(name: string): { success: boolean; index: number; list: string[] } {
   const cleanName = name.trim();
-  const list = getBlacklist();
+  const data = getBlacklistData();
 
   // Check if name already exists (case-insensitive)
-  const existingIdx = list.findIndex((n) => n.toLowerCase() === cleanName.toLowerCase());
+  const existingIdx = data.names.findIndex((n) => n.toLowerCase() === cleanName.toLowerCase());
   if (existingIdx !== -1) {
-    return { success: false, index: existingIdx + 1, list };
+    return { success: false, index: existingIdx + 1, list: data.names };
   }
 
-  list.push(cleanName);
-  saveBlacklist(list);
-  return { success: true, index: list.length, list };
+  data.names.push(cleanName);
+  saveBlacklistData(data);
+  return { success: true, index: data.names.length, list: data.names };
 }
 
 export function removeBlacklistName(query: string): { success: boolean; removedName?: string; list: string[] } {
   const cleanQuery = query.trim();
-  const list = getBlacklist();
+  const data = getBlacklistData();
 
   // Try parsing numeric index (1-based, like 01, 1, 37)
   const parsedNum = parseInt(cleanQuery, 10);
-  if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= list.length) {
-    const [removedName] = list.splice(parsedNum - 1, 1);
-    saveBlacklist(list);
-    return { success: true, removedName, list };
+  if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= data.names.length) {
+    const [removedName] = data.names.splice(parsedNum - 1, 1);
+    saveBlacklistData(data);
+    return { success: true, removedName, list: data.names };
   }
 
   // Search by exact or case-insensitive name match
-  const idx = list.findIndex((n) => n.toLowerCase() === cleanQuery.toLowerCase());
+  const idx = data.names.findIndex((n) => n.toLowerCase() === cleanQuery.toLowerCase());
   if (idx !== -1) {
-    const [removedName] = list.splice(idx, 1);
-    saveBlacklist(list);
-    return { success: true, removedName, list };
+    const [removedName] = data.names.splice(idx, 1);
+    saveBlacklistData(data);
+    return { success: true, removedName, list: data.names };
   }
 
-  return { success: false, list };
+  return { success: false, list: data.names };
 }
 
 export function buildBlacklistPayload(guildIconUrl?: string | null) {
@@ -163,4 +191,36 @@ export function buildBlacklistPayload(guildIconUrl?: string | null) {
       parse: ['roles', 'users', 'everyone'] as any,
     },
   };
+}
+
+export async function syncActiveBlacklistMessage(
+  client: Client,
+  guildIconUrl?: string | null
+): Promise<{ updated: boolean; channelId?: string; messageId?: string }> {
+  const data = getBlacklistData();
+  if (!data.postedMessage) return { updated: false };
+
+  try {
+    const channel = await client.channels.fetch(data.postedMessage.channelId);
+    if (!channel || !('messages' in channel)) return { updated: false };
+
+    const message = await (channel as any).messages.fetch(data.postedMessage.messageId);
+    if (!message) return { updated: false };
+
+    const payload = buildBlacklistPayload(guildIconUrl);
+    await message.edit({
+      content: payload.content,
+      embeds: payload.embeds,
+      allowedMentions: payload.allowedMentions,
+    });
+
+    return {
+      updated: true,
+      channelId: data.postedMessage.channelId,
+      messageId: data.postedMessage.messageId,
+    };
+  } catch (err) {
+    console.warn('Could not auto-sync posted blacklist message:', err);
+    return { updated: false };
+  }
 }

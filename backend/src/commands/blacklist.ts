@@ -12,6 +12,8 @@ import {
   addBlacklistName,
   removeBlacklistName,
   buildBlacklistPayload,
+  setPostedMessageInfo,
+  syncActiveBlacklistMessage,
   BLACKLIST_EMBED_COLOR,
 } from '../utils/blacklistStore.js';
 
@@ -24,7 +26,7 @@ export const blacklistCommand: Command = {
     .addSubcommand((sub) =>
       sub
         .setName('add')
-        .setDescription('Add a new individual to the blacklist')
+        .setDescription('Add a new individual to the blacklist (Auto-updates posted embed)')
         .addStringOption((opt) =>
           opt
             .setName('name')
@@ -36,7 +38,7 @@ export const blacklistCommand: Command = {
     .addSubcommand((sub) =>
       sub
         .setName('remove')
-        .setDescription('Remove an individual from the blacklist by name or number')
+        .setDescription('Remove an individual by name or number (Auto-updates posted embed)')
         .addStringOption((opt) =>
           opt
             .setName('target')
@@ -48,7 +50,7 @@ export const blacklistCommand: Command = {
     .addSubcommand((sub) =>
       sub
         .setName('post')
-        .setDescription('Send the official Blacklist Embed to a specific channel')
+        .setDescription('Send the official Blacklist Embed to a specific channel (Links live updates)')
         .addChannelOption((opt) =>
           opt
             .setName('channel')
@@ -66,7 +68,6 @@ export const blacklistCommand: Command = {
 
   async execute(interaction: ChatInputCommandInteraction) {
     // Enforce administrator permissions
-    const member = interaction.member;
     const permissions = interaction.memberPermissions;
     if (!permissions || !permissions.has(PermissionFlagsBits.Administrator)) {
       const errorEmbed = new EmbedBuilder()
@@ -97,14 +98,21 @@ export const blacklistCommand: Command = {
         return;
       }
 
+      // Auto-sync in-place with posted Discord embed
+      const syncResult = await syncActiveBlacklistMessage(interaction.client, interaction.guild?.iconURL());
+
+      const syncNote = syncResult.updated
+        ? `\n\n🔄 **Live Embed Updated:** The blacklist message in <#${syncResult.channelId}> was automatically updated in-place!`
+        : `\n\n*(Note: Run \`/blacklist post\` once to post and link a live updating announcement in a channel)*`;
+
       const addEmbed = new EmbedBuilder()
         .setColor(BLACKLIST_EMBED_COLOR)
         .setTitle('✅ Blacklist Updated (Name Added)')
         .setDescription(
           `Added **${name}** to the blacklist.\n\n` +
           `• **New Position:** \`${String(result.index).padStart(2, '0')}\`\n` +
-          `• **Total Blacklisted:** \`${result.list.length}\`\n\n` +
-          `*All numbers have been automatically rearranged.* Use \`/blacklist post\` to broadcast the updated notice.`
+          `• **Total Blacklisted:** \`${result.list.length}\`` +
+          syncNote
         )
         .setFooter({ text: 'Baba Group • Blacklist Registry' })
         .setTimestamp();
@@ -129,13 +137,21 @@ export const blacklistCommand: Command = {
         return;
       }
 
+      // Auto-sync in-place with posted Discord embed
+      const syncResult = await syncActiveBlacklistMessage(interaction.client, interaction.guild?.iconURL());
+
+      const syncNote = syncResult.updated
+        ? `\n\n🔄 **Live Embed Updated:** The blacklist message in <#${syncResult.channelId}> was automatically updated in-place!`
+        : `\n\n*(Note: Run \`/blacklist post\` once to post and link a live updating announcement in a channel)*`;
+
       const removeEmbed = new EmbedBuilder()
         .setColor(BLACKLIST_EMBED_COLOR)
         .setTitle('✅ Blacklist Updated (Name Removed)')
         .setDescription(
           `Successfully removed **${result.removedName}** from the blacklist.\n\n` +
-          `• **Remaining Blacklisted:** \`${result.list.length}\`\n\n` +
-          `*All numbering has been automatically rearranged and sequentialized.* Use \`/blacklist post\` to broadcast the updated notice.`
+          `• **Remaining Blacklisted:** \`${result.list.length}\`\n` +
+          `• **Renumbering:** All entries have been automatically rearranged sequentialized (\`01..${result.list.length}\`).` +
+          syncNote
         )
         .setFooter({ text: 'Baba Group • Blacklist Registry' })
         .setTimestamp();
@@ -160,12 +176,18 @@ export const blacklistCommand: Command = {
 
       try {
         const payload = buildBlacklistPayload(interaction.guild?.iconURL());
-        await channel.send(payload);
+        const sentMessage = await channel.send(payload);
+
+        // Save active message reference for in-place live auto-updates
+        setPostedMessageInfo(channel.id, sentMessage.id);
 
         const confirmEmbed = new EmbedBuilder()
           .setColor(BLACKLIST_EMBED_COLOR)
-          .setTitle('✅ Blacklist Announcement Posted')
-          .setDescription(`The official Baba Group Blacklist Notice has been posted to <#${channel.id}>.`)
+          .setTitle('✅ Blacklist Announcement Posted & Linked')
+          .setDescription(
+            `The official Baba Group Blacklist Notice has been posted to <#${channel.id}>.\n\n` +
+            `🔗 **Live Auto-Sync Active:** Whenever you run \`/blacklist add\` or \`/blacklist remove\`, this exact message will be **automatically edited in-place** without needing to repost!`
+          )
           .setFooter({ text: 'Baba Group • Blacklist Registry' })
           .setTimestamp();
 
