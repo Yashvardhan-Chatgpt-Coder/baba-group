@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { startKeepAlive } from '../utils/keepAlive.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -51,6 +52,21 @@ export function startDashboard(client: Client, port: number = 3000) {
     }
     next();
   });
+
+  // Public Health Check Endpoint for Render & 10-Minute Keep-Alive Pings
+  const handleHealth = (req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'ok',
+      service: 'Baba Group Discord Bot & Dashboard',
+      uptime: Math.floor(process.uptime()),
+      botOnline: client.isReady(),
+      botTag: client.user?.tag || 'Not Ready',
+      timestamp: new Date().toISOString(),
+    });
+  };
+
+  app.get('/health', handleHealth);
+  app.get('/api/health', handleHealth);
 
   // Middleware to enforce 72-hour session authentication for API endpoints
   const requireAuth = (req: Request, res: Response, next: NextFunction) => {
@@ -253,14 +269,19 @@ export function startDashboard(client: Client, port: number = 3000) {
     res.sendFile(path.join(frontendDir, 'index.html'));
   });
 
-  app.listen(port, () => {
-    console.log(`🌐 Web Dashboard & Embed Builder running at: http://localhost:${port}`);
-  }).on('error', (err: any) => {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`🌐 Web Dashboard & Embed Builder running at: http://0.0.0.0:${port}`);
+    // Start 10-minute auto keep-alive service
+    startKeepAlive(port);
+  });
+
+  server.on('error', (err: any) => {
     if (err.code === 'EADDRINUSE') {
       const fallbackPort = port + 1;
-      console.log(`⚠️ Port ${port} is in use, running Web Dashboard on http://localhost:${fallbackPort}...`);
-      app.listen(fallbackPort, () => {
-        console.log(`🌐 Web Dashboard & Embed Builder running at: http://localhost:${fallbackPort}`);
+      console.log(`⚠️ Port ${port} is in use, running Web Dashboard on http://0.0.0.0:${fallbackPort}...`);
+      app.listen(fallbackPort, '0.0.0.0', () => {
+        console.log(`🌐 Web Dashboard & Embed Builder running at: http://0.0.0.0:${fallbackPort}`);
+        startKeepAlive(fallbackPort);
       });
     } else {
       console.error('Server error:', err);
