@@ -7,6 +7,11 @@ import { Command } from './types/Command.js';
 import { pingCommand } from './commands/ping.js';
 import { moveallCommand } from './commands/moveall.js';
 import { blacklistCommand } from './commands/blacklist.js';
+import { strikeCommand } from './commands/strike.js';
+import { punishmentsCommand } from './commands/punishments.js';
+import { handleGuildMemberAdd } from './events/guildMemberAdd.js';
+import { processExpiredStrikes } from './services/strikeService.js';
+import { connectDatabase } from './db/connection.js';
 import { startDashboard } from './dashboard/server.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -42,18 +47,29 @@ if (!token) {
   process.exit(1);
 }
 
+// Connect to MongoDB Database
+connectDatabase();
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages,
   ],
 });
 
 // Command registry
 const commands = new Collection<string, Command>();
 
-const commandList: Command[] = [pingCommand, moveallCommand, blacklistCommand];
+const commandList: Command[] = [
+  pingCommand,
+  moveallCommand,
+  blacklistCommand,
+  strikeCommand,
+  punishmentsCommand,
+];
 
 for (const cmd of commandList) {
   commands.set(cmd.data.name, cmd);
@@ -67,7 +83,7 @@ client.once(Events.ClientReady, async (c) => {
     status: 'online',
     activities: [
       {
-        name: 'Baba Group | /moveall',
+        name: 'Baba Group | /strike',
         type: ActivityType.Watching,
       },
     ],
@@ -76,6 +92,14 @@ client.once(Events.ClientReady, async (c) => {
   // Start the Embed Builder Web Dashboard Backend
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
   startDashboard(client, port);
+
+  // Initial check for any expired strikes
+  processExpiredStrikes(client);
+
+  // Set up recurring check for expired strikes every 60 seconds
+  setInterval(() => {
+    processExpiredStrikes(client);
+  }, 60 * 1000);
 
   if (clientId) {
     const rest = new REST({ version: '10' }).setToken(token);
@@ -96,6 +120,11 @@ client.once(Events.ClientReady, async (c) => {
   } else {
     console.log('⚠️ Note: CLIENT_ID is needed in .env to register slash commands.');
   }
+});
+
+// Handle new members joining the server
+client.on(Events.GuildMemberAdd, async (member) => {
+  await handleGuildMemberAdd(member);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {

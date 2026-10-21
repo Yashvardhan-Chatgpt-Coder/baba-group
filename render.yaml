@@ -19,3 +19,5 @@ services:
         sync: false
       - key: DASHBOARD_PASSWORD
         sync: false
+      - key: MONGODB_URI
+        sync: false
