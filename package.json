@@ -4,6 +4,7 @@
   "description": "Baba Group Web Dashboard (Root Frontend) & Discord Bot (./backend)",
   "type": "module",
   "scripts": {
+    "build": "npm --prefix backend run build",
     "dev": "npm --prefix backend run dev",
     "start": "npm --prefix backend run start",
     "backend:install": "npm --prefix backend install",
