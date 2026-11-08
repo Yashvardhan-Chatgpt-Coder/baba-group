@@ -14,6 +14,7 @@ export const STRIKE_CONFIG = {
   LOG_CHANNEL_ID: '1562332987989958676',
   MEMBER_JOIN_CHANNEL_ID: '1562339079213948988',
   AUTO_ROLE_ID: '1557810934779744347',
+  ALLOWED_ROLE_IDS: ['1569042412779606188'],
   ISSUED_BANNER: 'https://i.imgur.com/EJ5T5vs.png',
   REMOVED_BANNER: 'https://i.imgur.com/RH8U4AN.png',
   WELCOME_BANNER: 'https://i.imgur.com/kZ0eUqz.png',
@@ -26,24 +27,32 @@ export const STRIKE_CONFIG = {
 
 /**
  * Checks if a member has permission to run strike commands.
- * Permission is granted if the member has Administrator or can send messages in the log channel.
+ * Permission is granted if the member has one of the allowed strike roles,
+ * has Administrator permissions, or is the guild owner.
  */
 export async function canManageStrikes(guild: Guild, member: GuildMember): Promise<boolean> {
-  if (member.permissions.has(PermissionFlagsBits.Administrator)) {
+  if (guild.ownerId === member.id) {
+    return true;
+  }
+
+  if (member.permissions && member.permissions.has(PermissionFlagsBits.Administrator)) {
     return true;
   }
 
   try {
-    const channel =
-      guild.channels.cache.get(STRIKE_CONFIG.LOG_CHANNEL_ID) ||
-      (await guild.channels.fetch(STRIKE_CONFIG.LOG_CHANNEL_ID).catch(() => null));
+    const allowedRoles = STRIKE_CONFIG.ALLOWED_ROLE_IDS;
+    const roles = member.roles;
+    if (!roles) return false;
 
-    if (!channel || !channel.isTextBased()) {
-      return false;
+    if (Array.isArray(roles)) {
+      return (roles as string[]).some((id) => allowedRoles.includes(id));
     }
 
-    const permissions = channel.permissionsFor(member);
-    return Boolean(permissions && permissions.has(PermissionFlagsBits.SendMessages));
+    if ('cache' in roles && roles.cache) {
+      return roles.cache.some((role) => allowedRoles.includes(role.id));
+    }
+
+    return false;
   } catch (error) {
     console.error('Error checking strike permissions:', error);
     return false;

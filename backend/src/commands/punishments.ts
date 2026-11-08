@@ -48,11 +48,12 @@ export const punishmentsCommand: Command = {
     const hasPermission = await canManageStrikes(interaction.guild, member);
 
     if (!hasPermission) {
+      const allowedRolesFormatted = STRIKE_CONFIG.ALLOWED_ROLE_IDS.map((id) => `<@&${id}>`).join(', ');
       const errorEmbed = new EmbedBuilder()
         .setColor(0x2b2d31)
         .setTitle('🚫 Access Denied')
         .setDescription(
-          `You do not have permission to view punishment records.\nOnly members with access to send messages in <#${STRIKE_CONFIG.LOG_CHANNEL_ID}> can use this command.`
+          `You do not have permission to view punishment records.\nOnly members with the required role (${allowedRolesFormatted}) can use this command.`
         )
         .setTimestamp();
 
