@@ -85,7 +85,7 @@ export const blacklistCommand: Command = {
     // 1. ADD NAME
     if (subcommand === 'add') {
       const name = interaction.options.getString('name', true).trim();
-      const result = addBlacklistName(name);
+      const result = await addBlacklistName(name);
 
       if (!result.success) {
         const existEmbed = new EmbedBuilder()
@@ -124,7 +124,7 @@ export const blacklistCommand: Command = {
     // 2. REMOVE NAME
     if (subcommand === 'remove') {
       const target = interaction.options.getString('target', true).trim();
-      const result = removeBlacklistName(target);
+      const result = await removeBlacklistName(target);
 
       if (!result.success) {
         const notFoundEmbed = new EmbedBuilder()
@@ -175,11 +175,11 @@ export const blacklistCommand: Command = {
       await interaction.deferReply({ flags: 64 });
 
       try {
-        const payload = buildBlacklistPayload(interaction.guild?.iconURL());
+        const payload = await buildBlacklistPayload(interaction.guild?.iconURL());
         const sentMessage = await channel.send(payload);
 
         // Save active message reference for in-place live auto-updates
-        setPostedMessageInfo(channel.id, sentMessage.id);
+        await setPostedMessageInfo(channel.id, sentMessage.id);
 
         const confirmEmbed = new EmbedBuilder()
           .setColor(BLACKLIST_EMBED_COLOR)
@@ -203,8 +203,8 @@ export const blacklistCommand: Command = {
 
     // 4. VIEW CURRENT BLACKLIST
     if (subcommand === 'view') {
-      const list = getBlacklist();
-      const payload = buildBlacklistPayload(interaction.guild?.iconURL());
+      const list = await getBlacklist();
+      const payload = await buildBlacklistPayload(interaction.guild?.iconURL(), list);
 
       await interaction.reply({
         content: `**[Admin Preview]** Current Baba Group Blacklist (${list.length} total individuals):`,

@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { EmbedBuilder, Client } from 'discord.js';
 import { fileURLToPath } from 'url';
+import mongoose from 'mongoose';
+import { BlacklistRegistry } from '../models/Blacklist.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,61 +62,115 @@ export interface BlacklistData {
 export const BLACKLIST_BANNER_URL = 'https://i.imgur.com/8NiI50L.png';
 export const BLACKLIST_EMBED_COLOR = 0xc9a66b; // Premium Gold #C9A66B
 
-export function getBlacklistData(): BlacklistData {
+// Helper to read backup/initial data from local JSON file
+function readLocalBlacklistFile(): BlacklistData {
   try {
-    if (!fs.existsSync(DATA_DIR)) {
-      fs.mkdirSync(DATA_DIR, { recursive: true });
+    if (fs.existsSync(DATA_FILE)) {
+      const raw = fs.readFileSync(DATA_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return { names: parsed };
+      }
+      if (parsed && Array.isArray(parsed.names)) {
+        return {
+          names: parsed.names,
+          postedMessage: parsed.postedMessage,
+        };
+      }
     }
-    if (!fs.existsSync(DATA_FILE)) {
-      const initialData: BlacklistData = { names: [...INITIAL_NAMES] };
-      saveBlacklistData(initialData);
-      return initialData;
-    }
-    const raw = fs.readFileSync(DATA_FILE, 'utf-8');
-    const parsed = JSON.parse(raw);
-
-    // Backward compatibility: if file is an array
-    if (Array.isArray(parsed)) {
-      const migrated: BlacklistData = { names: parsed };
-      saveBlacklistData(migrated);
-      return migrated;
-    }
-
-    if (parsed && Array.isArray(parsed.names)) {
-      return parsed;
-    }
-
-    return { names: [...INITIAL_NAMES] };
   } catch (err) {
-    console.error('Error reading blacklist file:', err);
-    return { names: [...INITIAL_NAMES] };
+    console.error('Error reading local blacklist backup file:', err);
   }
+  return { names: [...INITIAL_NAMES] };
 }
 
-export function saveBlacklistData(data: BlacklistData): void {
+// Helper to write backup to local JSON file
+function writeLocalBlacklistFile(data: BlacklistData): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
     }
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf-8');
   } catch (err) {
-    console.error('Error saving blacklist file:', err);
+    console.error('Error writing local blacklist backup file:', err);
   }
 }
 
-export function getBlacklist(): string[] {
-  return getBlacklistData().names;
+export async function getBlacklistData(): Promise<BlacklistData> {
+  // If MongoDB is connected, use DB as primary source of truth
+  if (mongoose.connection.readyState === 1) {
+    try {
+      let doc = await BlacklistRegistry.findOne({ registryId: 'default' });
+      if (!doc) {
+        // First-time setup / migration: read existing data from local file or INITIAL_NAMES
+        const seedData = readLocalBlacklistFile();
+        doc = await BlacklistRegistry.create({
+          registryId: 'default',
+          names: seedData.names,
+          postedMessage: seedData.postedMessage,
+        });
+        console.log(`✅ Blacklist data migrated to MongoDB (${doc.names.length} names registered)`);
+      }
+      const data: BlacklistData = {
+        names: doc.names || [],
+        postedMessage: doc.postedMessage
+          ? {
+              channelId: doc.postedMessage.channelId || '',
+              messageId: doc.postedMessage.messageId || '',
+            }
+          : undefined,
+      };
+      // Keep local file in sync as backup
+      writeLocalBlacklistFile(data);
+      return data;
+    } catch (err) {
+      console.error('Error fetching blacklist from MongoDB, falling back to local file:', err);
+    }
+  }
+
+  // Fallback to local file if MongoDB is disconnected or unavailable
+  return readLocalBlacklistFile();
 }
 
-export function setPostedMessageInfo(channelId: string, messageId: string): void {
-  const data = getBlacklistData();
+export async function saveBlacklistData(data: BlacklistData): Promise<void> {
+  // Always update local file as backup
+  writeLocalBlacklistFile(data);
+
+  if (mongoose.connection.readyState === 1) {
+    try {
+      await BlacklistRegistry.findOneAndUpdate(
+        { registryId: 'default' },
+        {
+          $set: {
+            names: data.names,
+            postedMessage: data.postedMessage,
+          },
+        },
+        { upsert: true, new: true }
+      );
+      console.log(`💾 Blacklist saved to MongoDB (${data.names.length} names)`);
+    } catch (err) {
+      console.error('❌ Error saving blacklist data to MongoDB:', err);
+    }
+  } else {
+    console.warn('⚠️ MongoDB not connected; saved blacklist to local file only.');
+  }
+}
+
+export async function getBlacklist(): Promise<string[]> {
+  const data = await getBlacklistData();
+  return data.names;
+}
+
+export async function setPostedMessageInfo(channelId: string, messageId: string): Promise<void> {
+  const data = await getBlacklistData();
   data.postedMessage = { channelId, messageId };
-  saveBlacklistData(data);
+  await saveBlacklistData(data);
 }
 
-export function addBlacklistName(name: string): { success: boolean; index: number; list: string[] } {
+export async function addBlacklistName(name: string): Promise<{ success: boolean; index: number; list: string[] }> {
   const cleanName = name.trim();
-  const data = getBlacklistData();
+  const data = await getBlacklistData();
 
   // Check if name already exists (case-insensitive)
   const existingIdx = data.names.findIndex((n) => n.toLowerCase() === cleanName.toLowerCase());
@@ -123,19 +179,19 @@ export function addBlacklistName(name: string): { success: boolean; index: numbe
   }
 
   data.names.push(cleanName);
-  saveBlacklistData(data);
+  await saveBlacklistData(data);
   return { success: true, index: data.names.length, list: data.names };
 }
 
-export function removeBlacklistName(query: string): { success: boolean; removedName?: string; list: string[] } {
+export async function removeBlacklistName(query: string): Promise<{ success: boolean; removedName?: string; list: string[] }> {
   const cleanQuery = query.trim();
-  const data = getBlacklistData();
+  const data = await getBlacklistData();
 
   // Try parsing numeric index (1-based, like 01, 1, 37)
   const parsedNum = parseInt(cleanQuery, 10);
   if (!isNaN(parsedNum) && parsedNum >= 1 && parsedNum <= data.names.length) {
     const [removedName] = data.names.splice(parsedNum - 1, 1);
-    saveBlacklistData(data);
+    await saveBlacklistData(data);
     return { success: true, removedName, list: data.names };
   }
 
@@ -143,15 +199,15 @@ export function removeBlacklistName(query: string): { success: boolean; removedN
   const idx = data.names.findIndex((n) => n.toLowerCase() === cleanQuery.toLowerCase());
   if (idx !== -1) {
     const [removedName] = data.names.splice(idx, 1);
-    saveBlacklistData(data);
+    await saveBlacklistData(data);
     return { success: true, removedName, list: data.names };
   }
 
   return { success: false, list: data.names };
 }
 
-export function buildBlacklistPayload(guildIconUrl?: string | null) {
-  const list = getBlacklist();
+export async function buildBlacklistPayload(guildIconUrl?: string | null, customList?: string[]) {
+  const list = customList ?? (await getBlacklist());
 
   const formattedNumberedList = list
     .map((name, i) => `${String(i + 1).padStart(2, '0')}. ${name}`)
@@ -197,7 +253,7 @@ export async function syncActiveBlacklistMessage(
   client: Client,
   guildIconUrl?: string | null
 ): Promise<{ updated: boolean; channelId?: string; messageId?: string }> {
-  const data = getBlacklistData();
+  const data = await getBlacklistData();
   if (!data.postedMessage) return { updated: false };
 
   try {
@@ -207,7 +263,7 @@ export async function syncActiveBlacklistMessage(
     const message = await (channel as any).messages.fetch(data.postedMessage.messageId);
     if (!message) return { updated: false };
 
-    const payload = buildBlacklistPayload(guildIconUrl);
+    const payload = await buildBlacklistPayload(guildIconUrl, data.names);
     await message.edit({
       content: payload.content,
       embeds: payload.embeds,

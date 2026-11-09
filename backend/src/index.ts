@@ -9,10 +9,14 @@ import { moveallCommand } from './commands/moveall.js';
 import { blacklistCommand } from './commands/blacklist.js';
 import { strikeCommand } from './commands/strike.js';
 import { punishmentsCommand } from './commands/punishments.js';
+import { storeRobberyCommand } from './commands/storeRobbery.js';
+import { activityCommand } from './commands/activity.js';
+import { specOpsCommand } from './commands/specOps.js';
 import { handleGuildMemberAdd } from './events/guildMemberAdd.js';
 import { processExpiredStrikes } from './services/strikeService.js';
 import { connectDatabase } from './db/connection.js';
 import { startDashboard } from './dashboard/server.js';
+import { getBlacklistData } from './utils/blacklistStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,6 +62,9 @@ const commandList: Command[] = [
   blacklistCommand,
   strikeCommand,
   punishmentsCommand,
+  storeRobberyCommand,
+  activityCommand,
+  specOpsCommand,
 ];
 
 for (const cmd of commandList) {
@@ -78,6 +85,9 @@ function setupClient(client: Client) {
         },
       ],
     });
+
+    // Ensure blacklist registry is synced with MongoDB
+    await getBlacklistData();
 
     // Initial check for any expired strikes
     processExpiredStrikes(client);
